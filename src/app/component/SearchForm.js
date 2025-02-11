@@ -42,7 +42,7 @@ const SearchForm = () => {
     isMounted.current = true; // ตั้งค่าเป็น true เมื่อ component ถูก mount
 
     const fetchAllLocations = async () => {
-      const totalPages = 1000;
+      const totalPages = 100;
       const batchSize = 100; // ดึงทีละ 1000 หน้า
       let allData = [];
       let loadedPages = 0; // จำนวนหน้าที่โหลดเสร็จแล้ว
@@ -221,7 +221,7 @@ const SearchForm = () => {
   console.log("locations", locations);
 
   return (
-    <div className="flex flex-col items-center space-y-5 p-5">
+    <div className="flex flex-col items-center space-y-5 p-5 mt-5">
       <div className="bg-white p-5 shadow-md rounded-lg">
         {loading ? (
           <div>

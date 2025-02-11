@@ -17,7 +17,7 @@ function page({ data }) {
                 height: "100vh", 
             }}
         >
-            <div className="items-center justify-center m-5">
+            <div className="items-center justify-center">
                 <SearchForm />
             </div>
 
