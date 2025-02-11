@@ -3,7 +3,6 @@
 import ImageSlider from "./component/ImageSlider";
 import { motion } from "framer-motion";
 
-
 export default function Home() {
 
   return (
@@ -100,6 +99,8 @@ export default function Home() {
           <img src="/img/internet.png" alt="internet" className="w-[60%] h-[60%] object-cover rounded-lg" />
         </div> 
       </motion.div>
+      {/* <MapComponent /> */}
+
     </div >
   );
 }

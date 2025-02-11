@@ -1,169 +1,345 @@
-import { useState, useEffect } from "react";
+"use client";
+
+import { useState, useEffect, useRef } from "react";
 import Map from "../map/Map";
+import { Button } from "@mui/material";
 
 const API_URL =
-  "https://v2k-dev.vallarismaps.com/core/api/features/1.1/collections/658cd4f88a4811f10a47cea7/items?api_key=bLNytlxTHZINWGt1GIRQBUaIlqz9X45XykLD83UkzIoN6PFgqbH7M7EDbsdgKVwC&collectionCreatedBy=60f539a5a44d2d7219fac3e3&offset=1300";
+  // "https://v2k-dev.vallarismaps.com/core/api/features/1.1/collections/658cd4f88a4811f10a47cea7/items?api_key=bLNytlxTHZINWGt1GIRQBUaIlqz9X45XykLD83UkzIoN6PFgqbH7M7EDbsdgKVwC&collectionCreatedBy=60f539a5a44d2d7219fac3e3&offset=1300";
+  "https://v2k-dev.vallarismaps.com/core/api/features/1.1/collections/658cd4f88a4811f10a47cea7/items?api_key=bLNytlxTHZINWGt1GIRQBUaIlqz9X45XykLD83UkzIoN6PFgqbH7M7EDbsdgKVwC";
 
 const SearchForm = () => {
+
+  const [loadingPercent, setLoadingPercent] = useState(0);
+
   const [locations, setLocations] = useState([]);
+  const [ctTn, setCtTn] = useState([]);
+  const [changwat, setChangwat] = useState([]);
+  const [luHpName, setLuHpName] = useState([]);
+  const [luName, setLuName] = useState([]);
+
+  const [coordsMap, setCoordsMap] = useState({});
+  const [mapCoords, setMapCoords] = useState([]);
+
   const [fromCoords, setFromCoords] = useState(null);
-  const [fromInputValue, setFromInputValue] = useState(""); 
-  const [fromLinkMap, setFromLinkMap] = useState(""); 
+  const [fromLinkMap, setFromLinkMap] = useState("");
+
+  const [selectedCtTns, setSelectedCtTns] = useState({});
+  const [selectedChangwats, setSelectedChangwats] = useState({});
+  const [selectedHpNames, setSelectedHpNames] = useState({});
+  const [selectedNames, setSelectedNames] = useState({});
+
 
   const [toCoords, setToCoords] = useState(null);
-  const [toInputValue, setToInputValue] = useState(""); 
-  const [toLinkMap, setToLinkMap] = useState(""); 
+  const [toLinkMap, setToLinkMap] = useState("");
 
-  const [distance, setDistance] = useState("0");
   const [loading, setLoading] = useState(true);
-  const [showMap, setShowMap] = useState(false); 
+  const isMounted = useRef(true); // ตรวจสอบว่า component ยังอยู่หรือไม่
 
-  console.log("fromCoords", fromCoords);
-  console.log("fromInputValue", fromInputValue);
-  console.log("toCoords", toCoords);
-  console.log("toInputValue", toInputValue);
+  const delay = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 
   useEffect(() => {
+    isMounted.current = true; // ตั้งค่าเป็น true เมื่อ component ถูก mount
+
     const fetchAllLocations = async () => {
+      const totalPages = 1000;
+      const batchSize = 100; // ดึงทีละ 1000 หน้า
       let allData = [];
-      let nextUrl = API_URL;
-      let count = 0;
+      let loadedPages = 0; // จำนวนหน้าที่โหลดเสร็จแล้ว
 
-      while (nextUrl && count < 10) { // เปลี่ยนเป็น 10 ครั้งตามที่ต้องการ
+      for (let i = 0; i < totalPages; i += batchSize) {
+        if (!isMounted.current) return; // ❌ หยุดทำงานถ้า component ถูก unmount
+
+        console.log(`📡 Fetching batch ${i / batchSize + 1}...`);
+        const batch = [];
+
+        for (let j = 0; j < batchSize; j++) {
+          const offset = (i + j) * 10;
+          const url = `${API_URL}&collectionCreatedBy=60f539a5a44d2d7219fac3e3&offset=${offset}`;
+          batch.push(fetch(url).then((res) => res.json()));
+        }
+
         try {
-          console.log(`📡 Fetching API (${count + 1}/10):`, nextUrl);
-          const response = await fetch(nextUrl);
-          if (!response.ok) throw new Error(`❌ API Fetch Failed: ${response.statusText}`);
+          const results = await Promise.all(batch);
 
-          const data = await response.json();
+          loadedPages += batchSize;
 
-          const newLocations = data.features.map((item) => ({
-            id: item.id,
-            coords: item.geometry.coordinates,
-            village: item.properties?.village || "", 
-            changwat: item.properties?.changwat || "", 
-            tambol: item.properties?.tambol || "", 
-            amphoe: item.properties?.amphoe || "", 
-            ct_tn: item.properties?.ct_tn || "", 
-            linkgmap: item.properties?.linkgmap || "", 
-          }));
+          // คำนวณเปอร์เซ็นต์ที่โหลดเสร็จ
+          const percentLoaded = Math.min((loadedPages / totalPages) * 100, 100);
+          setLoadingPercent(percentLoaded); 
 
-          allData = [...allData, ...newLocations];
+          if (!isMounted.current) return; 
 
-          const nextLink = data.links?.find((link) => link.rel === "next");
-          nextUrl = nextLink ? nextLink.href : null;
+          const batchData = results.flatMap((data) =>
+            data.features.map((item) => ({
+              id: item.id,
+              coords: item.geometry.coordinates,
+              village: item.properties?.village || "",
+              changwat: item.properties?.changwat || "",
+              tambol: item.properties?.tambol || "",
+              amphoe: item.properties?.amphoe || "",
+              ct_tn: item.properties?.ct_tn || "",
+              linkgmap: item.properties?.linkgmap || "",
+              lu_hp_name: item.properties?.lu_hp_name || "-",
+              lu_name: item.properties?.lu_name || "-",
+            }))
+          );
 
-          count++;
+          allData = [...allData, ...batchData];
+          console.log(`✅ Batch ${i / batchSize + 1} completed!`);
+
+          // หน่วงเวลา 1 วินาทีระหว่าง Batch
+          await delay(100);
         } catch (error) {
-          console.error("⚠️ Error fetching locations:", error);
-          nextUrl = null;
+          console.error("⚠️ Error fetching batch:", error);
         }
       }
 
-      const uniqueLocations = allData.filter((value, index, self) =>
-        index === self.findIndex((t) => t.id === value.id)
-      );
+      if (isMounted.current) {
+        // กรองข้อมูลที่ไม่ซ้ำกัน
 
-      console.log("✅ All Unique Locations Data:", uniqueLocations);
+        const uniqueCtTn = allData.filter(
+          (value, index, self) =>
+            index === self.findIndex((t) => t.ct_tn === value.ct_tn) &&
+            value.ct_tn !== "" && value.ct_tn !== "-"
+        );
 
-      setLocations(uniqueLocations); 
-      setLoading(false);
+        const uniqueChangwat = allData.filter(
+          (value, index, self) =>
+            index === self.findIndex((t) => t.changwat === value.changwat) &&
+            value.changwat !== "" && value.changwat !== "-"
+        );
+
+
+        const uniqueLu_hp_name = allData.filter(
+          (value, index, self) =>
+            index === self.findIndex((t) => t.lu_hp_name === value.lu_hp_name) &&
+            value.lu_hp_name !== "" && value.lu_hp_name !== "-"
+        );
+        const uniqueLu_name = allData.filter(
+          (value, index, self) =>
+            index === self.findIndex((t) => t.lu_name === value.lu_name) &&
+            value.lu_name !== "" && value.lu_name !== "-"
+        );
+
+        allData.sort((a, b) => a.ct_tn.localeCompare(b.ct_tn, 'th')); // เพิ่มการเรียงข้อมูล
+
+        const coordsMapping = allData.reduce((acc, item) => {
+          acc[item.ct_tn] = acc[item.ct_tn] || [];
+          acc[item.ct_tn].push(item.coords);
+
+          acc[item.changwat] = acc[item.changwat] || [];
+          acc[item.changwat].push(item.coords);
+
+          acc[item.lu_hp_name] = acc[item.lu_hp_name] || [];
+          acc[item.lu_hp_name].push(item.coords);
+
+          acc[item.lu_name] = acc[item.lu_name] || [];
+          acc[item.lu_name].push(item.coords);
+          return acc;
+        }, {});
+
+        setCtTn(uniqueCtTn);
+        setChangwat(uniqueChangwat);
+        setLuHpName(uniqueLu_hp_name);
+        setLuName(uniqueLu_name);
+        setCoordsMap(coordsMapping);
+        setLocations(allData);
+        setLoading(false);
+      }
     };
 
     fetchAllLocations();
+
+    return () => {
+      isMounted.current = false;
+    };
   }, []);
+  console.log('changwat', changwat);
+
+  useEffect(() => {
+    // ค้นหาพิกัดทั้งหมดที่ถูกเลือกจาก checkbox
+    const selectedCoords = Object.keys(selectedCtTns)
+      .filter((name) => selectedCtTns[name]) // ค้นหาชื่อที่ถูกเลือก
+      .flatMap((name) => coordsMap[name] || []) // ดึงค่าพิกัดจาก coordsMap
+      .concat(
+        Object.keys(selectedChangwats)
+          .filter((name) => selectedChangwats[name])
+          .flatMap((name) => coordsMap[name] || [])
+          .concat(
+            Object.keys(selectedHpNames)
+              .filter((name) => selectedHpNames[name])
+              .flatMap((name) => coordsMap[name] || [])
+              .concat(
+                Object.keys(selectedNames)
+                  .filter((name) => selectedNames[name])
+                  .flatMap((name) => coordsMap[name] || [])
+              )
+          )
+      );
+
+    setMapCoords(selectedCoords); // อัปเดตพิกัดที่จะแสดงบนแผนที่
+
+  }, [selectedCtTns, selectedChangwats, selectedHpNames, selectedNames, coordsMap, locations]);
 
 
-  const calculateDistance = (coords1, coords2) => {
-    if (!coords1 || !coords2) return "0";
-
-    const toRad = (angle) => (angle * Math.PI) / 180;
-    const [lon1, lat1] = coords1;
-    const [lon2, lat2] = coords2;
-    const R = 6371;
-
-    const dLat = toRad(lat2 - lat1);
-    const dLon = toRad(lon2 - lon1);
-    const a =
-      Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-      Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) *
-      Math.sin(dLon / 2) * Math.sin(dLon / 2);
-    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-    return (R * c).toFixed(2);
+  const handleCtTnChange = (ctTnName) => {
+    setSelectedCtTns((prev) => ({
+      ...prev,
+      [ctTnName]: !prev[ctTnName]
+    }));
   };
 
+  const handleChangwatChange = (changwatName) => {
+    setSelectedChangwats((prev) => ({
+      ...prev,
+      [changwatName]: !prev[changwatName]
+    }));
+  };
+
+  const handleHpNameChange = (lu_hp_name) => {
+    setSelectedHpNames((prev) => ({
+      ...prev,
+      [lu_hp_name]: !prev[lu_hp_name]
+    }));
+  };
+
+  const handleNameChange = (lu_name) => {
+    setSelectedNames((prev) => ({
+      ...prev,
+      [lu_name]: !prev[lu_name]
+    }));
+  };
+
+  const handleClearAll = () => {
+    setSelectedCtTns({});
+    setSelectedChangwats({});
+    setSelectedHpNames({});
+    setSelectedNames({});
+  };
+
+  console.log("locations", locations);
 
   return (
     <div className="flex flex-col items-center space-y-5 p-5">
       <div className="bg-white p-5 shadow-md rounded-lg">
         {loading ? (
-          <p className="text-lg font-bold text-gray-600">⏳ กำลังโหลดข้อมูล...</p>
+          <div>
+            <p className="text-lg font-bold text-gray-600">⏳ กำลังโหลดข้อมูล...</p>
+            <p className="text-sm">โหลดแล้ว {loadingPercent}%</p> {/* แสดงเปอร์เซ็นต์ */}
+          </div>
         ) : (
-          <form className="text-center" >
-            <label className="mr-2">จาก</label>
+          <div className="grid grid-cols-5">
+            <Button variant="contained" color="success" className="h-[5rem]" onClick={handleClearAll}>ล้างทั้งหมด</Button> {/* ปุ่มล้าง */}
 
-            <select
-              className="border p-2 m-2"
-              value={fromInputValue}
-              onChange={(e) => {
-                const selectedId = e.target.value;
-                setFromInputValue(selectedId);
-                const foundLocation = locations.find((loc) => loc.id === selectedId);
-                if (foundLocation) {
-                  setFromCoords(foundLocation.coords);
-                  setFromLinkMap(foundLocation.linkgmap);
-                  if (toCoords) setDistance(calculateDistance(foundLocation.coords, toCoords));
-                } else {
-                  setFromCoords(null);
-                }
-              }}
-            >
-              <option value="">เลือกสถานที่</option>
-              {locations
-                .slice()
-                .sort((a, b) => a.ct_tn.localeCompare(b.ct_tn, "th")) // เรียงตาม ct_tn
-                .map((location) => (
-                  <option key={location.id} value={location.id} data-coordinates={JSON.stringify(location.coords)}>
-                    {`${location.village}, ${location.changwat}, ${location.tambol}, ${location.amphoe}, ${location.ct_tn}`}
-                  </option>
-                ))}
-            </select>
-            <label className="mr-2">ถึง</label>
-            <select
-              className="border p-2 m-2"
-              value={toInputValue}
-              onChange={(e) => {
-                const selectedId = e.target.value;
-                setToInputValue(selectedId);
-
-                // ค้นหาสถานที่จาก ID ที่เลือก
-                const foundLocation = locations.find((loc) => loc.id === selectedId);
-                if (foundLocation) {
-                  setToCoords(foundLocation.coords);
-                  setFromLinkMap(foundLocation.linkgmap);
-                  if (fromCoords) setDistance(calculateDistance(fromCoords, foundLocation.coords));
-                } else {
-                  setToCoords(null);
-                }
-              }}
-            >
-              <option value="">เลือกสถานที่</option>
-              {locations
-                .slice() 
-                .sort((a, b) => a.ct_tn.localeCompare(b.ct_tn, "th")) 
-                .map((location) => (
-                  <option key={location.id} value={location.id} data-coordinates={JSON.stringify(location.coords)}>
-                    {`${location.village}, ${location.changwat}, ${location.tambol}, ${location.amphoe}, ${location.ct_tn}`}
-                  </option>
-                ))}
-
-            </select>
-            <p className="mt-3 text-lg font-bold">ระยะทางตรง: {distance} กม.</p>
-          </form>
+            <div className=" overflow-y-auto h-[20rem]">
+              <h2 className="text-lg font-semibold mb-2">✅ ct_tn</h2>
+              <table className="min-w-full bg-white border border-gray-200 shadow-md">
+                <thead>
+                  <tr className="bg-gray-100">
+                    <th className="py-2 px-4 border">เลือก</th>
+                    <th className="py-2 px-4 border">ct_tn</th>
+                  </tr>
+                </thead>
+                <tbody className="max-h-60 overflow-y-auto">
+                  {ctTn.sort((a, b) => a.ct_tn.localeCompare(b.ct_tn)).map((name, index) => (
+                    <tr key={index} className="border-b">
+                      <td className="py-2 px-4 border text-center">
+                        <input
+                          type="checkbox"
+                          checked={!!selectedCtTns[name.ct_tn]}
+                          onChange={() => handleCtTnChange(name.ct_tn)}
+                          className="w-5 h-5"
+                        />
+                      </td>
+                      <td className="py-2 px-4 border">{name.ct_tn}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            <div className=" overflow-y-auto h-[20rem]">
+              <h2 className="text-lg font-semibold mb-2">✅ changwat</h2>
+              <table className="min-w-full bg-white border border-gray-200 shadow-md">
+                <thead>
+                  <tr className="bg-gray-100">
+                    <th className="py-2 px-4 border">เลือก</th>
+                    <th className="py-2 px-4 border">changwat</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {changwat.sort((a, b) => a.changwat.localeCompare(b.changwat)).map((name, index) => (
+                    <tr key={index} className="border-b">
+                      <td className="py-2 px-4 border text-center">
+                        <input
+                          type="checkbox"
+                          checked={!!selectedChangwats[name.changwat]}
+                          onChange={() => handleChangwatChange(name.changwat)}
+                          className="w-5 h-5"
+                        />
+                      </td>
+                      <td className="py-2 px-4 border">{name.changwat}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            <div className=" overflow-y-auto h-[20rem]">
+              <h2 className="text-lg font-semibold mb-2">✅ lu_hp_name</h2>
+              <table className="min-w-full bg-white border border-gray-200 shadow-md">
+                <thead>
+                  <tr className="bg-gray-100">
+                    <th className="py-2 px-4 border">เลือก</th>
+                    <th className="py-2 px-4 border">lu_hp_name</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {luHpName.sort((a, b) => a.lu_hp_name.localeCompare(b.lu_hp_name)).map((name, index) => (
+                    <tr key={index} className="border-b">
+                      <td className="py-2 px-4 border text-center">
+                        <input
+                          type="checkbox"
+                          checked={!!selectedHpNames[name.lu_hp_name]}
+                          onChange={() => handleHpNameChange(name.lu_hp_name)}
+                          className="w-5 h-5"
+                        />
+                      </td>
+                      <td className="py-2 px-4 border">{name.lu_hp_name}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            <div className=" overflow-y-auto h-[20rem]">
+              <h2 className="text-lg font-semibold mb-2">✅ lu_name</h2>
+              <table className="min-w-full bg-white border border-gray-200 shadow-md">
+                <thead>
+                  <tr className="bg-gray-100">
+                    <th className="py-2 px-4 border">เลือก</th>
+                    <th className="py-2 px-4 border">lu_name</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {luName.sort((a, b) => a.lu_name.localeCompare(b.lu_name)).map((name, index) => (
+                    <tr key={index} className="border-b">
+                      <td className="py-2 px-4 border text-center">
+                        <input
+                          type="checkbox"
+                          checked={!!selectedNames[name.lu_name]}
+                          onChange={() => handleNameChange(name.lu_name)}
+                          className="w-5 h-5"
+                        />
+                      </td>
+                      <td className="py-2 px-4 border">{name.lu_name}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
         )}
       </div>
-
-      <Map fromCoords={fromCoords} fromLinkMap={fromLinkMap} toCoords={toCoords} toLinkMap={toLinkMap} />
+      <Map allLocat={locations} coordinates={mapCoords} fromCoords={fromCoords} fromLinkMap={fromLinkMap} toCoords={toCoords} toLinkMap={toLinkMap} />
     </div>
   );
 };

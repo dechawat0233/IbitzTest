@@ -1,92 +1,63 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import maplibregl from "maplibre-gl";
 import "maplibre-gl/dist/maplibre-gl.css";
 
-const Map = ({ fromCoords, fromLinkMap, toCoords, toLinkMap }) => {
-  const mapContainerRef = useRef(null);
-  const mapRef = useRef(null);
+const Map = ({ coordinates, allLocat }) => {
+  const mapContainer = useRef(null);
+  const [mapInstance, setMapInstance] = useState(null);
+
+  console.log("coordinates", coordinates);
 
   useEffect(() => {
-    if (!mapContainerRef.current) return;
+    const map = new maplibregl.Map({
+      container: mapContainer.current, // ใช้ div ที่กำหนด
+      style: "https://demotiles.maplibre.org/style.json", // สไตล์ของแผนที่
+      center: [101.37117, 15.47803], // ศูนย์กลางเริ่มต้นของแผนที่
+      zoom: 6, // ระดับการซูมเริ่มต้น
+    });
 
-    if (!mapRef.current) {
-      mapRef.current = new maplibregl.Map({
-        container: mapContainerRef.current,
-        style: "https://demotiles.maplibre.org/style.json",
-        center: fromCoords || [100.5167, 13.7367],  
-        zoom: 6,
-      });
+    setMapInstance(map); // ตั้งค่า mapInstance
 
-      mapRef.current.on("style.load", () => {  // Wait for style to load
-        mapRef.current.addSource("route", {
-          type: "geojson",
-          data: {
-            type: "FeatureCollection",
-            features: [],
-          },
-        });
-
-        mapRef.current.addLayer({
-          id: "route-layer",
-          type: "line",
-          source: "route",
-          layout: {
-            "line-cap": "round",
-            "line-join": "round",
+    map.on("load", () => {
+      // สำหรับแต่ละพิกัดใน coordinates, เพิ่มจุดกลม
+      coordinates.forEach((coord) => {
+        map.addLayer({
+          id: `circle-layer-${coord[0]}-${coord[1]}`,
+          type: "circle",
+          source: {
+            type: "geojson",
+            data: {
+              type: "FeatureCollection",
+              features: [
+                {
+                  type: "Feature",
+                  geometry: {
+                    type: "Point",
+                    coordinates: coord, // พิกัดจาก array
+                  },
+                  properties: {},
+                },
+              ],
+            },
           },
           paint: {
-            "line-color": "#ff0000",
-            "line-width": 5,
+            "circle-radius": 5, // ขนาดของจุดกลม
+            "circle-color": "#FF0000", // สีของจุด
+            "circle-opacity": 0.8, // ความโปร่งใส
           },
         });
       });
-    }
-    if (mapRef.current) {
-      mapRef.current.setCenter(fromCoords || [100.5167, 13.7367]); 
-      document.querySelectorAll(".maplibregl-marker").forEach((marker) => marker.remove());
-      if (fromCoords) {
-        new maplibregl.Marker({ color: "blue" })
-          .setLngLat(fromCoords)
-          .setPopup(
-            new maplibregl.Popup().setHTML(
-              `จาก <a href="${fromLinkMap}" target="_blank" rel="noopener noreferrer">${fromLinkMap}</a>`
-            )
-          )
-          .addTo(mapRef.current);
-      }
-      if (toCoords) {
-        new maplibregl.Marker({ color: "red" })
-          .setLngLat(toCoords)
-          .setPopup(
-            new maplibregl.Popup().setHTML(
-              `ถึง <a href="${toLinkMap}" target="_blank" rel="noopener noreferrer">${toLinkMap}</a>`
-            )
-          )
-          .addTo(mapRef.current);
-      }
-      if (fromCoords && toCoords) {
-        const routeGeoJson = {
-          type: "FeatureCollection",
-          features: [
-            {
-              type: "Feature",
-              geometry: {
-                type: "LineString",
-                coordinates: [fromCoords, toCoords],
-              },
-            },
-          ],
-        };
-        if (mapRef.current.getSource("route")) {  
-          mapRef.current.getSource("route").setData(routeGeoJson);
-        }
-      }
-    }
-  }, [fromCoords, toCoords]);
+    });
 
-  return <div ref={mapContainerRef} className="w-full h-[48rem] rounded-lg shadow-lg" />;
+    // ทำความสะอาดแผนที่เมื่อคอมโพเนนต์ถูกลบ
+    return () => {
+      map.remove();
+    };
+  }, [coordinates]);
+
+  return <div ref={mapContainer} style={{ width: "100%", height: "500px" }} />;
 };
 
 export default Map;
