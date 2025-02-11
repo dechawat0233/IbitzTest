@@ -42,7 +42,7 @@ const SearchForm = () => {
     isMounted.current = true; // ตั้งค่าเป็น true เมื่อ component ถูก mount
 
     const fetchAllLocations = async () => {
-      const totalPages = 100;
+      const totalPages = 1000;
       const batchSize = 100; // ดึงทีละ 1000 หน้า
       let allData = [];
       let loadedPages = 0; // จำนวนหน้าที่โหลดเสร็จแล้ว
